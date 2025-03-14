@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Telegram.Bot;
 using Telegram.Bot.Types;
+using System;
 using System.Threading.Tasks;
 
 [ApiController]
@@ -8,10 +9,23 @@ using System.Threading.Tasks;
 public class TelegramController : ControllerBase
 {
     private readonly TelegramBotClient _botClient;
+    private readonly long _chatId; // 👈 Добавляем переменную для chat_id
 
     public TelegramController(TelegramBotClient botClient)
     {
         _botClient = botClient;
+
+        // Загружаем CHAT_ID из переменной окружения
+        string? chatIdEnv = Environment.GetEnvironmentVariable("CHAT_ID");
+        if (!long.TryParse(chatIdEnv, out _chatId))
+        {
+            Console.WriteLine("❌ Ошибка: CHAT_ID не задан или имеет неверный формат!");
+            _chatId = 0; // Значение по умолчанию
+        }
+        else
+        {
+            Console.WriteLine($"✅ CHAT_ID загружен: {_chatId}");
+        }
     }
 
     [HttpPost]
@@ -21,12 +35,19 @@ public class TelegramController : ControllerBase
         {
             if (update?.Message != null)
             {
-                var chatId = update.Message.Chat.Id;
+                var incomingChatId = update.Message.Chat.Id;
                 var messageText = update.Message.Text;
 
-                Console.WriteLine($"✅ Сообщение от {chatId}: {messageText}");
+                Console.WriteLine($"✅ Сообщение от {incomingChatId}: {messageText}");
 
-                await _botClient.SendTextMessageAsync(chatId, $"Ты написал: {messageText}");
+                // ✅ Проверяем, совпадает ли входящий chat_id с указанным в переменной окружения
+                if (_chatId == 0 || incomingChatId != _chatId)
+                {
+                    Console.WriteLine($"⚠️ Игнорируем сообщение от {incomingChatId}, так как оно не из указанного чата.");
+                    return Ok();
+                }
+
+                await _botClient.SendTextMessageAsync(_chatId, $"Ты написал: {messageText}");
             }
             else
             {
@@ -35,7 +56,7 @@ public class TelegramController : ControllerBase
 
             return Ok();
         }
-        catch (System.Exception ex)
+        catch (Exception ex)
         {
             Console.WriteLine($"❌ Ошибка при обработке вебхука: {ex.Message}");
             return StatusCode(500, "Ошибка на сервере.");
