@@ -7,7 +7,6 @@ using Telegram.Bot;
 using Telegram.Bot.Types;
 using Microsoft.AspNetCore.Mvc;
 using System;
-using System.IO;
 using System.Threading.Tasks;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,29 +35,16 @@ app.UseRouting();
 // ✅ Webhook - обработка сообщений
 app.MapPost("/web-hook", async ([FromBody] Update update) =>
 {
-    try
+    if (update?.Message != null)
     {
-        if (update.Message != null)
-        {
-            var chatId = update.Message.Chat.Id;
-            var messageText = update.Message.Text;
-
-            Console.WriteLine($"🔹 Новое сообщение от {chatId}: {messageText}");
-
-            await botClient.SendTextMessageAsync(chatId, "✅ Ваше сообщение получено!");
-        }
-        else
-        {
-            Console.WriteLine("⚠️ Получено обновление без сообщения.");
-        }
+        Console.WriteLine($"Новое сообщение от {update.Message.Chat.Id}: {update.Message.Text}");
+        await botClient.SendTextMessageAsync(update.Message.Chat.Id, "Ваше сообщение получено!");
     }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"❌ Ошибка обработки сообщения: {ex.Message}");
-    }
+
+    return Results.Ok();
 });
 
 // ✅ ОБЯЗАТЕЛЬНО: подключение контроллеров
-app.MapControllers(); 
+app.MapControllers();
 
 app.Run();
