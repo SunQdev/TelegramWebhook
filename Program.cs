@@ -1,15 +1,12 @@
-using System.IO;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Telegram.Bot;
-using Microsoft.AspNetCore.Mvc;
 using System;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ✅ Используем Newtonsoft.Json для корректного парсинга Telegram API
+// ✅ Добавляем поддержку JSON
 builder.Services.AddControllers().AddNewtonsoftJson();
 
 string? BotToken = Environment.GetEnvironmentVariable("BOT_TOKEN");
@@ -31,7 +28,18 @@ var app = builder.Build();
 
 app.UseRouting();
 
-// ✅ 📌 Только один маршрут (он уже задан в TelegramController.cs)
-app.MapControllers(); 
+// ✅ Включаем логирование ошибок
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        Console.WriteLine("❌ Вебхуку вызвана ошибка 500");
+        context.Response.StatusCode = 500;
+        await context.Response.WriteAsync("Ошибка сервера!");
+    });
+});
+
+// ✅ Подключаем контроллеры
+app.MapControllers();
 
 app.Run();
