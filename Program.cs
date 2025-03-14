@@ -13,7 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers()
     .AddNewtonsoftJson();
 
-string BotToken = Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN");
+string BotToken = Environment.GetEnvironmentVariable("BOT_TOKEN");
 
 // Подключаем Telegram Bot
 builder.Services.AddSingleton<TelegramBotClient>(new TelegramBotClient(BotToken));
