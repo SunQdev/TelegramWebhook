@@ -4,11 +4,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Telegram.Bot;
-using Telegram.Bot.Types;
 using Microsoft.AspNetCore.Mvc;
 using System;
-using System.Text.Json;
-using System.Threading.Tasks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,7 +31,7 @@ var app = builder.Build();
 
 app.UseRouting();
 
-// ✅ Подключаем контроллеры (обязательно)
-app.MapControllers();
+// ✅ 📌 Только один маршрут (он уже задан в TelegramController.cs)
+app.MapControllers(); 
 
 app.Run();
