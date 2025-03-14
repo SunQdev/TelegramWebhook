@@ -7,32 +7,58 @@ using Telegram.Bot;
 using Telegram.Bot.Types;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.IO;
 using System.Threading.Tasks;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Используем Newtonsoft.Json для десериализации Telegram API JSON
+// ✅ Используем Newtonsoft.Json для корректной работы с Telegram API
 builder.Services.AddControllers().AddNewtonsoftJson();
 
-string BotToken = Environment.GetEnvironmentVariable("BOT_TOKEN");
+// ✅ Загружаем токен из переменной окружения
+string? BotToken = Environment.GetEnvironmentVariable("BOT_TOKEN");
+
+if (string.IsNullOrEmpty(BotToken))
+{
+    Console.WriteLine("❌ Ошибка: Токен бота не найден! Убедись, что переменная окружения BOT_TOKEN задана.");
+    return;
+}
+
 var botClient = new TelegramBotClient(BotToken);
 
-// Регистрируем Telegram Bot
+// ✅ Регистрируем Telegram Bot
 builder.Services.AddSingleton(botClient);
 
 var app = builder.Build();
 
 app.UseRouting();
 
-// ✅ Регистрируем Webhook
-app.MapPost("/webhook", async ([FromBody] Update update) =>
+// ✅ Webhook - обработка сообщений
+app.MapPost("/web-hook", async ([FromBody] Update update) =>
 {
-    if (update.Message != null)
+    try
     {
-        Console.WriteLine($"Новое сообщение от {update.Message.Chat.Id}: {update.Message.Text}");
-        await botClient.SendTextMessageAsync(update.Message.Chat.Id, "Ваше сообщение получено!");
+        if (update.Message != null)
+        {
+            var chatId = update.Message.Chat.Id;
+            var messageText = update.Message.Text;
+
+            Console.WriteLine($"🔹 Новое сообщение от {chatId}: {messageText}");
+
+            await botClient.SendTextMessageAsync(chatId, "✅ Ваше сообщение получено!");
+        }
+        else
+        {
+            Console.WriteLine("⚠️ Получено обновление без сообщения.");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Ошибка обработки сообщения: {ex.Message}");
     }
 });
 
-app.MapControllers(); // ОБЯЗАТЕЛЬНО для работы контроллеров!
+// ✅ ОБЯЗАТЕЛЬНО: подключение контроллеров
+app.MapControllers(); 
+
 app.Run();
