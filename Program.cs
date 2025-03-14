@@ -34,4 +34,5 @@ app.MapPost("/webhook", async ([FromBody] Update update) =>
     }
 });
 
+app.MapControllers(); // ОБЯЗАТЕЛЬНО для работы контроллеров!
 app.Run();
