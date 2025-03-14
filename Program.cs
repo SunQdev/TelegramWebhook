@@ -2,6 +2,7 @@ using System.IO;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Microsoft.AspNetCore.Mvc;
@@ -11,16 +12,18 @@ using System.Threading.Tasks;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ✅ Используем Newtonsoft.Json для корректного парсинга
+// ✅ Используем Newtonsoft.Json для корректного парсинга Telegram API
 builder.Services.AddControllers().AddNewtonsoftJson();
 
 string? BotToken = Environment.GetEnvironmentVariable("BOT_TOKEN");
 
 if (string.IsNullOrEmpty(BotToken))
 {
-    Console.WriteLine("❌ Ошибка: Токен бота не найден!");
+    Console.WriteLine("❌ Ошибка: Токен бота не найден! Убедись, что переменная окружения BOT_TOKEN задана.");
     return;
 }
+
+Console.WriteLine($"✅ BOT_TOKEN загружен: {BotToken.Substring(0, 5)}********");
 
 var botClient = new TelegramBotClient(BotToken);
 
@@ -31,34 +34,42 @@ var app = builder.Build();
 
 app.UseRouting();
 
-// ✅ Webhook - обработка сообщений
+// ✅ Webhook - обработка сообщений с логированием
 app.MapPost("/web-hook", async (HttpContext context) =>
 {
     try
     {
-        // 📌 Логируем весь JSON перед обработкой
         string requestBody = await new StreamReader(context.Request.Body).ReadToEndAsync();
-        Console.WriteLine($"📩 Получен Webhook JSON: {requestBody}");
+        Console.WriteLine($"📥 Получен Webhook JSON: {requestBody}");
 
-        // ✅ Парсим JSON вручную
-        var update = JsonSerializer.Deserialize<Update>(requestBody);
-
-        if (update?.Message != null)
+        var update = JsonSerializer.Deserialize<Update>(requestBody, new JsonSerializerOptions
         {
-            Console.WriteLine($"💬 Новое сообщение от {update.Message.Chat.Id}: {update.Message.Text}");
-            await botClient.SendTextMessageAsync(update.Message.Chat.Id, "✅ Ваше сообщение получено!");
+            PropertyNameCaseInsensitive = true
+        });
+
+        if (update == null)
+        {
+            Console.WriteLine("❌ Ошибка: JSON не распознан!");
+            context.Response.StatusCode = 400; // Bad Request
+            return;
         }
 
-        await context.Response.WriteAsync("OK");
+        if (update.Message != null)
+        {
+            Console.WriteLine($"📩 Новое сообщение от {update.Message.Chat.Id}: {update.Message.Text}");
+            await botClient.SendTextMessageAsync(update.Message.Chat.Id, "Ваше сообщение получено!");
+        }
+
+        context.Response.StatusCode = 200;
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"❌ Ошибка обработки Webhook: {ex.Message}");
-        await context.Response.WriteAsync("Error");
+        Console.WriteLine($"🔥 Ошибка обработки Webhook: {ex.Message}");
+        context.Response.StatusCode = 500; // Internal Server Error
     }
 });
 
-// ✅ Подключаем контроллеры
+// ✅ Подключаем контроллеры (обязательно)
 app.MapControllers();
 
 app.Run();
