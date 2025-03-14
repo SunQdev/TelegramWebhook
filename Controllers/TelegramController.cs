@@ -4,7 +4,7 @@ using Telegram.Bot.Types;
 using System.Threading.Tasks;
 
 [ApiController]
-[Route("webhook")]
+[Route("web-hook")]
 public class TelegramController : ControllerBase
 {
     private readonly TelegramBotClient _botClient;
@@ -17,12 +17,16 @@ public class TelegramController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Post([FromBody] Update update)
     {
+        Console.WriteLine($"Получено обновление: {update}");
+
         if (update.Message != null)
         {
             var chatId = update.Message.Chat.Id;
-            var text = update.Message.Text;
+            var messageText = update.Message.Text;
 
-            await _botClient.SendTextMessageAsync(chatId, $"Ты сказал: {text}");
+            Console.WriteLine($"Сообщение от {chatId}: {messageText}");
+
+            await _botClient.SendTextMessageAsync(chatId, $"Ты написал: {messageText}");
         }
 
         return Ok();
