@@ -61,5 +61,6 @@ public class TelegramController : ControllerBase
             Console.WriteLine($"❌ Ошибка при обработке вебхука: {ex.Message}");
             return StatusCode(500, "Ошибка на сервере.");
         }
+
     }
 }
