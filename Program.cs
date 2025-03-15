@@ -51,7 +51,7 @@ app.MapPost("/send-message", async (HttpContext context) =>
         await botClient.SendTextMessageAsync(chatId, text);
 
         // 🟢 Добавляем сообщение в историю
-        messageHistory.Add($"[Unity] {text}");
+        messageHistory.Add($"[South City] {text}");
 
         return Results.Ok();
     }
@@ -86,11 +86,19 @@ app.MapPost("/web-hook", async (HttpContext context) =>
             string text = update.Message.Text;
             long messageId = update.Message.MessageId;
 
+            string senderName = "Unknown"; // Значение по умолчанию
+            if (update.Message.From != null)
+            {
+                senderName = !string.IsNullOrEmpty(update.Message.From.Username)
+                    ? $"@{update.Message.From.Username}" // Если есть username, используем его
+                    : update.Message.From.FirstName ?? "Unknown"; // Если нет - берем FirstName
+            }
+
             if (messageId > lastMessageId) // Фильтруем только новые сообщения
             {
                 lastMessageId = messageId;
-                Console.WriteLine($"✅ Telegram: {text}");
-                messageHistory.Add($"[Telegram] {text}");
+                Console.WriteLine($"✅ Telegram: {senderName}: {text}");
+                messageHistory.Add($"[Telegram] {senderName}: {text}"); // Добавляем ник отправителя
             }
         }
 
