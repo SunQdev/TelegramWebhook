@@ -3,7 +3,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Telegram.Bot;
 using Telegram.Bot.Types;
-using Microsoft.AspNetCore.Mvc;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -27,12 +26,11 @@ Console.WriteLine($"✅ BOT_TOKEN загружен: {BotToken.Substring(0, 5)}**
 var botClient = new TelegramBotClient(BotToken);
 builder.Services.AddSingleton(botClient);
 
-// 🟢 **Храним все сообщения (Telegram + Unity)**
-List<string> messageHistory = new List<string>();
+// 🟢 **Храним последние 50 сообщений**
+Queue<string> messageHistory = new Queue<string>();
 long lastMessageId = 0;
 
 var app = builder.Build();
-
 app.UseRouting();
 
 // ✅ API для Unity (отправка сообщений)
@@ -52,7 +50,13 @@ app.MapPost("/send-message", async (HttpContext context) =>
         await botClient.SendTextMessageAsync(chatId, text);
 
         // 🟢 Добавляем сообщение в историю
-        messageHistory.Add($"[Unity] {text}");
+        messageHistory.Enqueue($"[Unity] {text}");
+
+        // Ограничение на 50 сообщений
+        if (messageHistory.Count > 50)
+        {
+            messageHistory.Dequeue();
+        }
 
         return Results.Ok();
     }
@@ -66,33 +70,42 @@ app.MapPost("/send-message", async (HttpContext context) =>
 // ✅ **API для Unity (получение новых сообщений)**
 app.MapGet("/get-latest-messages", () =>
 {
-    Console.WriteLine("📥 Unity запросил новые сообщения");
-
-    string messages = string.Join("\n", messageHistory);
-    return Results.Text(messages);
+    Console.WriteLine("📥 Unity запросил последние сообщения");
+    return Results.Text(string.Join("\n", messageHistory));
 });
 
 // ✅ **Обрабатываем входящие сообщения от Telegram (Webhook)**
 app.MapPost("/web-hook", async ([FromBody] Update update) =>
 {
-    if (update?.Message != null)
+    try
     {
-        long chatId = update.Message.Chat.Id;
-        string text = update.Message.Text;
-        long messageId = update.Message.MessageId;
-
-        if (messageId > lastMessageId) // Фильтруем только новые сообщения
+        if (update?.Message != null)
         {
-            lastMessageId = messageId;
-            Console.WriteLine($"✅ Telegram: {text}");
-            messageHistory.Add($"[Telegram] {text}");
+            long chatId = update.Message.Chat.Id;
+            string text = update.Message.Text;
+            long messageId = update.Message.MessageId;
+
+            if (messageId > lastMessageId) // Фильтруем только новые сообщения
+            {
+                lastMessageId = messageId;
+                Console.WriteLine($"✅ Telegram: {text}");
+
+                messageHistory.Enqueue($"[Telegram] {text}");
+
+                // Ограничение на 50 сообщений
+                if (messageHistory.Count > 50)
+                {
+                    messageHistory.Dequeue();
+                }
+            }
         }
+        return Results.Ok();
     }
-
-    return Results.Ok();
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Ошибка обработки Webhook: {ex.Message}");
+        return Results.Problem("Ошибка сервера.");
+    }
 });
-
-// ✅ Подключаем контроллеры
-app.MapControllers();
 
 app.Run();
