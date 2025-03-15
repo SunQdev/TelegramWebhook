@@ -8,7 +8,6 @@ using System.IO;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using System.Collections.Generic;
-using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,11 +26,12 @@ Console.WriteLine($"✅ BOT_TOKEN загружен: {BotToken.Substring(0, 5)}**
 var botClient = new TelegramBotClient(BotToken);
 builder.Services.AddSingleton(botClient);
 
-// 🟢 **Храним последние 50 сообщений**
-Queue<string> messageHistory = new Queue<string>();
+// 🟢 **Храним все сообщения (Telegram + Unity)**
+List<string> messageHistory = new List<string>();
 long lastMessageId = 0;
 
 var app = builder.Build();
+
 app.UseRouting();
 
 // ✅ API для Unity (отправка сообщений)
@@ -51,13 +51,7 @@ app.MapPost("/send-message", async (HttpContext context) =>
         await botClient.SendTextMessageAsync(chatId, text);
 
         // 🟢 Добавляем сообщение в историю
-        messageHistory.Enqueue($"[Unity] {text}");
-
-        // Ограничение на 50 сообщений
-        if (messageHistory.Count > 50)
-        {
-            messageHistory.Dequeue();
-        }
+        messageHistory.Add($"[Unity] {text}");
 
         return Results.Ok();
     }
@@ -71,15 +65,21 @@ app.MapPost("/send-message", async (HttpContext context) =>
 // ✅ **API для Unity (получение новых сообщений)**
 app.MapGet("/get-latest-messages", () =>
 {
-    Console.WriteLine("📥 Unity запросил последние сообщения");
-    return Results.Text(string.Join("\n", messageHistory));
+    Console.WriteLine("📥 Unity запросил новые сообщения");
+
+    string messages = string.Join("\n", messageHistory);
+    return Results.Text(messages);
 });
 
 // ✅ **Обрабатываем входящие сообщения от Telegram (Webhook)**
-app.MapPost("/web-hook", async ([FromBody] Update update) =>
+app.MapPost("/web-hook", async (HttpContext context) =>
 {
     try
     {
+        using var reader = new StreamReader(context.Request.Body);
+        string requestBody = await reader.ReadToEndAsync();
+        var update = JsonConvert.DeserializeObject<Update>(requestBody);
+
         if (update?.Message != null)
         {
             long chatId = update.Message.Chat.Id;
@@ -90,22 +90,16 @@ app.MapPost("/web-hook", async ([FromBody] Update update) =>
             {
                 lastMessageId = messageId;
                 Console.WriteLine($"✅ Telegram: {text}");
-
-                messageHistory.Enqueue($"[Telegram] {text}");
-
-                // Ограничение на 50 сообщений
-                if (messageHistory.Count > 50)
-                {
-                    messageHistory.Dequeue();
-                }
+                messageHistory.Add($"[Telegram] {text}");
             }
         }
+
         return Results.Ok();
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"❌ Ошибка обработки Webhook: {ex.Message}");
-        return Results.Problem("Ошибка сервера.");
+        Console.WriteLine($"❌ Ошибка в обработке Webhook: {ex.Message}");
+        return Results.Problem("Ошибка на сервере.");
     }
 });
 
