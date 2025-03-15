@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Telegram.Bot;
+using Telegram.Bot.Types;
+using Microsoft.AspNetCore.Mvc;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -14,10 +16,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers().AddNewtonsoftJson();
 
 string? BotToken = Environment.GetEnvironmentVariable("BOT_TOKEN");
-
 if (string.IsNullOrEmpty(BotToken))
 {
-    Console.WriteLine("❌ Ошибка: Токен бота не найден! Убедись, что переменная окружения BOT_TOKEN задана.");
+    Console.WriteLine("❌ Ошибка: Токен бота не найден!");
     return;
 }
 
@@ -26,23 +27,13 @@ Console.WriteLine($"✅ BOT_TOKEN загружен: {BotToken.Substring(0, 5)}**
 var botClient = new TelegramBotClient(BotToken);
 builder.Services.AddSingleton(botClient);
 
-// 🟢 Временное хранилище сообщений
+// 🟢 **Храним все сообщения (Telegram + Unity)**
 List<string> messageHistory = new List<string>();
+long lastMessageId = 0;
 
 var app = builder.Build();
 
 app.UseRouting();
-
-// ✅ Логирование ошибок
-app.UseExceptionHandler(errorApp =>
-{
-    errorApp.Run(async context =>
-    {
-        Console.WriteLine("❌ Вебхуку вызвана ошибка 500");
-        context.Response.StatusCode = 500;
-        await context.Response.WriteAsync("Ошибка сервера!");
-    });
-});
 
 // ✅ API для Unity (отправка сообщений)
 app.MapPost("/send-message", async (HttpContext context) =>
@@ -60,7 +51,7 @@ app.MapPost("/send-message", async (HttpContext context) =>
 
         await botClient.SendTextMessageAsync(chatId, text);
 
-        // 🟢 Сохраняем сообщение в историю
+        // 🟢 Добавляем сообщение в историю
         messageHistory.Add($"[Unity] {text}");
 
         return Results.Ok();
@@ -72,13 +63,33 @@ app.MapPost("/send-message", async (HttpContext context) =>
     }
 });
 
-// ✅ API для Unity (получение сообщений)
-app.MapGet("/get-messages", () =>
+// ✅ **API для Unity (получение новых сообщений)**
+app.MapGet("/get-latest-messages", () =>
 {
-    Console.WriteLine("📥 Unity запросил последние сообщения");
+    Console.WriteLine("📥 Unity запросил новые сообщения");
 
     string messages = string.Join("\n", messageHistory);
     return Results.Text(messages);
+});
+
+// ✅ **Обрабатываем входящие сообщения от Telegram (Webhook)**
+app.MapPost("/web-hook", async ([FromBody] Update update) =>
+{
+    if (update?.Message != null)
+    {
+        long chatId = update.Message.Chat.Id;
+        string text = update.Message.Text;
+        long messageId = update.Message.MessageId;
+
+        if (messageId > lastMessageId) // Фильтруем только новые сообщения
+        {
+            lastMessageId = messageId;
+            Console.WriteLine($"✅ Telegram: {text}");
+            messageHistory.Add($"[Telegram] {text}");
+        }
+    }
+
+    return Results.Ok();
 });
 
 // ✅ Подключаем контроллеры
